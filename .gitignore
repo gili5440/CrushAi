@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+backend/uploads/
+embedding-service/venv/
+embedding-service/__pycache__/
+mobile/.expo/
+.DS_Store

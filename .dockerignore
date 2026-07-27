@@ -1,0 +1,10 @@
+**/node_modules
+**/dist
+backend/uploads
+**/.env
+**/*.log
+mobile
+embedding-service/venv
+embedding-service/__pycache__
+docs
+.git

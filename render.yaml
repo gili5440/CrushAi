@@ -1,0 +1,57 @@
+# Render.com deployment blueprint — https://render.com/docs/blueprint-spec
+# One-time setup: render.com → New → Blueprint → point at this repo.
+# After the first deploy, open the "crushai-backend" service's Shell tab once
+# and run `npm run migrate` (or set it as a Pre-Deploy Command in the dashboard).
+#
+# ⚠️ Verify pgvector is enabled on the Postgres instance (Render dashboard →
+# your database → Extensions) before the first deploy — search/visual will
+# fail with a Postgres error otherwise.
+
+databases:
+  - name: crushai-db
+    plan: free
+    databaseName: crushai
+    user: crushai
+
+services:
+  - type: web
+    name: crushai-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: crushai-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ALLOWED_ORIGINS
+        value: https://crushai.co.il,https://www.crushai.co.il
+      - key: EMBEDDING_SERVICE_URL
+        fromService:
+          type: pserv
+          name: crushai-embeddings
+          property: hostport
+      # Object storage (fill in once you have an R2/S3 bucket — see backend/.env.example):
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_PUBLIC_URL
+        sync: false
+
+  - type: pserv
+    name: crushai-embeddings
+    runtime: docker
+    dockerfilePath: ./embedding-service/Dockerfile
+    dockerContext: ./embedding-service
+    plan: starter
