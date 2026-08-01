@@ -1,5 +1,5 @@
 /* ===========================================================
-   CrushAI web app — real backend wiring behind the exact
+   YourType web app — real backend wiring behind the exact
    markup/CSS of the design system. Function names match the
    onclick="" handlers already present in index.html verbatim;
    nothing in the HTML/CSS was changed except two hidden
@@ -7,7 +7,7 @@
    =========================================================== */
 
 const API_BASE = "http://localhost:4000";
-const TOKEN_KEY = "crushai_token";
+const TOKEN_KEY = "yourtype_token";
 
 function getToken() { return localStorage.getItem(TOKEN_KEY); }
 function setToken(t) { localStorage.setItem(TOKEN_KEY, t); }
@@ -827,7 +827,7 @@ async function caExportMyData() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'crushai-my-data.json';
+    a.download = 'yourtype-my-data.json';
     a.click();
     URL.revokeObjectURL(url);
   } catch {

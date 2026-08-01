@@ -68,7 +68,7 @@ authRouter.post("/otp/request", async (req, res) => {
   );
 
   if (twilioConfigured) {
-    await sendSms(phone, `קוד האימות שלך ל-CrushAI: ${code}`);
+    await sendSms(phone, `קוד האימות שלך ל-YourType: ${code}`);
     return res.json({ ok: true });
   }
 

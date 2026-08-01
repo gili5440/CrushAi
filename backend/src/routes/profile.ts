@@ -188,7 +188,7 @@ profileRouter.get("/me/export", async (req: AuthedRequest, res) => {
     ),
   ]);
 
-  res.setHeader("Content-Disposition", "attachment; filename=crushai-my-data.json");
+  res.setHeader("Content-Disposition", "attachment; filename=yourtype-my-data.json");
   res.json({
     exportedAt: new Date().toISOString(),
     user: user.rows[0],

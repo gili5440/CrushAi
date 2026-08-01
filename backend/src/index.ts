@@ -85,7 +85,7 @@ const port = Number(process.env.PORT) || 4000;
 runMigrations(pool)
   .then(() => {
     app.listen(port, () => {
-      console.log(`CrushAI backend listening on http://localhost:${port}`);
+      console.log(`YourType backend listening on http://localhost:${port}`);
     });
   })
   .catch((err) => {
