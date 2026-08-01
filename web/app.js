@@ -6,7 +6,7 @@
    <input type="file"> elements for real photo uploads.
    =========================================================== */
 
-const API_BASE = "http://localhost:4000";
+const API_BASE = location.hostname === "localhost" || location.hostname === "127.0.0.1" ? "http://localhost:4000" : "";
 const TOKEN_KEY = "yourtype_token";
 
 function getToken() { return localStorage.getItem(TOKEN_KEY); }
