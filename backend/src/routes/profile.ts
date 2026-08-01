@@ -124,11 +124,14 @@ profileRouter.post("/me/photos", upload.single("photo"), async (req: AuthedReque
     return res.status(404).json({ error: "profile_not_found_create_profile_first" });
   }
 
-  let embedding: number[];
+  // If the AI embedding service is down, still save the photo — it just won't
+  // be findable by visual search until it's re-processed. Keeps profile setup
+  // (and testing) unblocked when that service isn't running.
+  let embeddingLiteral: string | null = null;
   try {
-    embedding = await getEmbedding(req.file.buffer);
+    embeddingLiteral = toVectorLiteral(await getEmbedding(req.file.buffer));
   } catch (err) {
-    return res.status(502).json({ error: "embedding_service_unavailable" });
+    console.warn("embedding_service_unavailable — saving photo without an embedding");
   }
 
   const storageUrl = await saveUploadedFile(req.file.buffer, generateFilename(req.file.originalname), req.file.mimetype);
@@ -143,7 +146,7 @@ profileRouter.post("/me/photos", upload.single("photo"), async (req: AuthedReque
     `INSERT INTO profile_photos (profile_id, storage_url, embedding, is_primary)
      VALUES ($1, $2, $3, $4)
      RETURNING id, storage_url, is_primary, created_at`,
-    [profile.id, storageUrl, toVectorLiteral(embedding), isPrimary]
+    [profile.id, storageUrl, embeddingLiteral, isPrimary]
   );
 
   res.status(201).json(result.rows[0]);

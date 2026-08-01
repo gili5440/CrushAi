@@ -45,7 +45,7 @@ async function fetchResultsPage(
   params.push(PAGE_SIZE, page * PAGE_SIZE);
 
   const query = `
-    SELECT p.id AS profile_id, p.display_name, p.birth_date, p.region,
+    SELECT p.id AS profile_id, p.display_name, p.birth_date, p.region, p.bio, p.profession, p.lifestyle_tags,
            ph.storage_url AS primary_photo_url,
            (ph.embedding <=> $1) AS distance
     FROM profiles p
@@ -64,6 +64,50 @@ async function fetchResultsPage(
   return result.rows;
 }
 
+/** Used when the AI embedding service is unreachable — recent profiles instead of style-matched ones, so the flow still works for testing. */
+async function fetchFallbackPage(
+  userId: string,
+  filters: { minAge?: number; maxAge?: number; gender?: string },
+  page: number
+) {
+  const conditions: string[] = [
+    "p.visible_in_ai_search = true",
+    "p.user_id != $1",
+    "NOT EXISTS (SELECT 1 FROM interactions bi WHERE bi.user_id = $1 AND bi.target_profile_id = p.id AND bi.type = 'block')",
+  ];
+  const params: any[] = [userId];
+  let paramIndex = 2;
+
+  if (filters.gender) {
+    conditions.push(`p.gender = $${paramIndex++}`);
+    params.push(filters.gender);
+  }
+  if (filters.minAge) {
+    conditions.push(`date_part('year', age(p.birth_date)) >= $${paramIndex++}`);
+    params.push(filters.minAge);
+  }
+  if (filters.maxAge) {
+    conditions.push(`date_part('year', age(p.birth_date)) <= $${paramIndex++}`);
+    params.push(filters.maxAge);
+  }
+
+  params.push(PAGE_SIZE, page * PAGE_SIZE);
+
+  const query = `
+    SELECT p.id AS profile_id, p.display_name, p.birth_date, p.region, p.bio, p.profession, p.lifestyle_tags,
+           ph.storage_url AS primary_photo_url, 0 AS distance
+    FROM profiles p
+    LEFT JOIN LATERAL (
+      SELECT storage_url FROM profile_photos WHERE profile_id = p.id ORDER BY is_primary DESC, created_at ASC LIMIT 1
+    ) ph ON true
+    WHERE ${conditions.join(" AND ")}
+    ORDER BY p.updated_at DESC
+    LIMIT $${paramIndex++} OFFSET $${paramIndex++}
+  `;
+  const result = await pool.query(query, params);
+  return result.rows;
+}
+
 searchRouter.post("/visual", upload.single("photo"), async (req: AuthedRequest, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "photo_required" });
@@ -75,13 +119,13 @@ searchRouter.post("/visual", upload.single("photo"), async (req: AuthedRequest, 
     gender: req.body.gender || undefined,
   };
 
-  let embedding: number[];
+  let embeddingLiteral: string | null = null;
   try {
-    embedding = await getEmbedding(req.file.buffer);
+    embeddingLiteral = toVectorLiteral(await getEmbedding(req.file.buffer));
   } catch (err) {
-    return res.status(502).json({ error: "embedding_service_unavailable" });
+    console.warn("embedding_service_unavailable — falling back to recent profiles for this search");
   }
-  const embeddingLiteral = toVectorLiteral(embedding);
+
   const inspirationPhotoUrl = await saveUploadedFile(req.file.buffer, generateFilename(req.file.originalname, "insp-"), req.file.mimetype);
 
   const searchResult = await pool.query(
@@ -92,9 +136,11 @@ searchRouter.post("/visual", upload.single("photo"), async (req: AuthedRequest, 
   );
   const searchId = searchResult.rows[0].id;
 
-  const results = await fetchResultsPage(embeddingLiteral, req.userId!, filters, 0);
+  const results = embeddingLiteral
+    ? await fetchResultsPage(embeddingLiteral, req.userId!, filters, 0)
+    : await fetchFallbackPage(req.userId!, filters, 0);
 
-  res.status(201).json({ searchId, results, page: 0, expandedSearch: results.length === 0 });
+  res.status(201).json({ searchId, results, page: 0, expandedSearch: results.length === 0, aiUnavailable: !embeddingLiteral });
 });
 
 const RELIGION_LABELS: Record<string, string> = {
@@ -161,7 +207,7 @@ searchRouter.post("/traits", async (req: AuthedRequest, res) => {
   const searchId = searchInsert.rows[0].id;
 
   const query = `
-    SELECT p.id AS profile_id, p.display_name, p.birth_date, p.region, ph.storage_url AS primary_photo_url, 0 AS distance
+    SELECT p.id AS profile_id, p.display_name, p.birth_date, p.region, p.bio, p.profession, p.lifestyle_tags, ph.storage_url AS primary_photo_url, 0 AS distance
     FROM profiles p
     LEFT JOIN LATERAL (
       SELECT storage_url FROM profile_photos WHERE profile_id = p.id ORDER BY is_primary DESC, created_at ASC LIMIT 1

@@ -1,4 +1,5 @@
 import "dotenv/config";
+import "express-async-errors"; // makes async route handler errors reach the error middleware instead of crashing the process
 import path from "path";
 import cors from "cors";
 import express from "express";
@@ -63,6 +64,10 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
   console.error(err);
   res.status(500).json({ error: "internal_error" });
 });
+
+// Defense in depth: log but don't crash on errors outside the request cycle
+// (express-async-errors above handles the normal route-handler case).
+process.on("unhandledRejection", (err) => console.error("unhandledRejection", err));
 
 const port = Number(process.env.PORT) || 4000;
 app.listen(port, () => {

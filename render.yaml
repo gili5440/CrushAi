@@ -19,7 +19,7 @@ services:
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: .
-    plan: starter
+    plan: free
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
@@ -30,8 +30,11 @@ services:
           property: connectionString
       - key: JWT_SECRET
         generateValue: true
+      # Fill this in with your real onrender.com URL (or custom domain) once
+      # you know it — same-origin requests (the web/ app calling its own
+      # backend) don't need this at all, it's only for other origins.
       - key: ALLOWED_ORIGINS
-        value: https://crushai.co.il,https://www.crushai.co.il
+        sync: false
       - key: EMBEDDING_SERVICE_URL
         fromService:
           type: pserv
@@ -54,4 +57,4 @@ services:
     runtime: docker
     dockerfilePath: ./embedding-service/Dockerfile
     dockerContext: ./embedding-service
-    plan: starter
+    plan: free

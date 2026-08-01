@@ -64,6 +64,7 @@ for (let i = 0; i < 28; i++) {
 
 document.getElementById('ca-screen-home').classList.add('ca-hidden');
 document.getElementById('ca-screen-splash').classList.remove('ca-hidden');
+history.replaceState({ screen: 'splash' }, '', '#splash');
 setTimeout(() => { caShowScreen('home'); }, 1300);
 
 function caTileImg(seed) {
@@ -121,17 +122,28 @@ function caNavigateTo(name) {
 
 function caShowScreen(name) {
   const activeEl = document.querySelector('.ca-screen:not(.ca-hidden)');
-  if (activeEl) {
-    const prev = activeEl.id.replace('ca-screen-', '');
-    if (prev !== name) caHistory.push(prev);
+  const prev = activeEl ? activeEl.id.replace('ca-screen-', '') : null;
+  if (prev && prev !== name) {
+    caHistory.push(prev);
+    history.pushState({ screen: name }, '', '#' + name);
+  } else if (!history.state) {
+    history.replaceState({ screen: name }, '', '#' + name);
   }
   caNavigateTo(name);
 }
 
+// Real back-navigation — this also makes the browser's own Back button (and
+// mobile swipe-back) work, not just the in-app "← חזרה" links, since both
+// paths now go through popstate below.
 function caGoBack() {
-  const prev = caHistory.pop();
-  caNavigateTo(prev || 'home');
+  history.back();
 }
+
+window.addEventListener('popstate', (event) => {
+  caHistory.pop();
+  const screen = (event.state && event.state.screen) || 'home';
+  caNavigateTo(screen);
+});
 
 function caRequireAuth(action) {
   if (caLoggedIn && caHasProfile) { action(); return; }
@@ -533,7 +545,8 @@ function caDrawResultsGrid() {
       </div>
       <div class="ca-card-body">
         <div class="ca-card-name">${p.display_name}, ${ageFromBirthDate(p.birth_date)}</div>
-        <div class="ca-card-meta">${p.region || ''}</div>
+        <div class="ca-card-meta">${[p.region, p.profession].filter(Boolean).map(escapeHtml).join(' · ')}</div>
+        ${p.bio ? `<div class="ca-card-snippet">${escapeHtml(p.bio)}</div>` : ''}
       </div>
       <span style="padding:0 10px; color:var(--ca-text-muted); font-size:16px; align-self:center;" onclick="event.stopPropagation(); caDismissProfile('${p.profile_id}')">✕</span>`;
     grid.appendChild(card);
@@ -563,9 +576,9 @@ function caOpenProfile(p) {
   const hero = document.getElementById('ca-profile-hero');
   hero.innerHTML = `<div class="ca-bust" style="--a:#5A3A6E;--b:#241A34;--tile-img:${caTileImgUrl(p.primary_photo_url, p.profile_id)}; border-radius:20px;"></div>`;
   document.getElementById('ca-profile-name').textContent = `${p.display_name}, ${ageFromBirthDate(p.birth_date)}`;
-  document.getElementById('ca-profile-sub').textContent = p.region || '';
-  document.getElementById('ca-profile-bio').textContent = '';
-  document.getElementById('ca-profile-tags').innerHTML = '';
+  document.getElementById('ca-profile-sub').textContent = [p.region, p.profession].filter(Boolean).join(' · ');
+  document.getElementById('ca-profile-bio').textContent = p.bio || '';
+  document.getElementById('ca-profile-tags').innerHTML = (p.lifestyle_tags || []).map(t => `<div class="ca-chip">${escapeHtml(t)}</div>`).join('');
   document.getElementById('ca-profile-prompt').innerHTML = '';
   caShowScreen('profile');
 }
@@ -901,7 +914,6 @@ async function caSaveEditProfile() {
 
 function caSaveDiscovery() {
   const prefs = {
-    distance: document.getElementById('ca-dist-range').value,
     ageMin: document.getElementById('ca-set-age-min').value,
     ageMax: document.getElementById('ca-set-age-max').value,
   };
