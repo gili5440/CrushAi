@@ -1397,6 +1397,10 @@ body{
     </button>
 
     <button class="ca-btn ca-btn-secondary" onclick="caStartQuiz()">חיפוש לפי מאפיינים ואישיות</button>
+
+    <div id="ca-home-signup-cta" style="text-align:center; margin-top:22px; font-size:13px; color:var(--ca-text-secondary);">
+      עדיין אין לך חשבון? <span style="color:var(--ca-purple-400); cursor:pointer; font-weight:600;" onclick="caShowScreen('auth')">להרשמה לחץ כאן</span>
+    </div>
   </div>
 
   <div class="ca-content ca-screen ca-hidden" id="ca-screen-analyzing">
@@ -1407,7 +1411,8 @@ body{
   </div>
 
   <div class="ca-content ca-screen ca-hidden" id="ca-screen-results">
-    <div class="ca-recent-head" style="margin-top:0">42 התאמות נמצאו</div>
+    <div class="ca-recent-head" id="ca-user-greeting" style="margin-top:0; display:none;"></div>
+    <div class="ca-recent-head" id="ca-results-count" style="margin-top:0">42 התאמות נמצאו</div>
     <div class="ca-filter-row">
       <div class="ca-chip" style="cursor:pointer;" onclick="caShowScreen('discovery')">+ פילטרים</div>
       <div class="ca-chip" id="ca-boost-badge" style="display:none; cursor:pointer; color:var(--ca-gold);" onclick="caShowScreen('boost')">⚡ Boost פעיל</div>

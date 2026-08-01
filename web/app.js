@@ -87,6 +87,8 @@ let caHasSearched = false;
 function caUpdateHomeRecent() {
   const label = document.getElementById('ca-home-recent-label');
   if (label) label.textContent = caHasSearched ? 'חיפושים אחרונים' : 'הצעות לחיפוש';
+  const cta = document.getElementById('ca-home-signup-cta');
+  if (cta) cta.style.display = caLoggedIn ? 'none' : '';
 }
 
 const CA_SCREENS = ['auth', 'onboarding', 'notif', 'home', 'analyzing', 'results', 'profile', 'chats', 'settings',
@@ -514,9 +516,27 @@ let caCurrentProfile = null;
 function caRenderResults() {
   caVisibleProfiles = caLastResults.slice();
   caRemovedProfiles = [];
-  const head = document.querySelector('#ca-screen-results .ca-recent-head');
+  const head = document.getElementById('ca-results-count');
   if (head) head.textContent = caLastResults.length + ' התאמות נמצאו';
+  caShowUserGreeting();
   caDrawResultsGrid();
+}
+
+async function caShowUserGreeting() {
+  const greeting = document.getElementById('ca-user-greeting');
+  if (!greeting) return;
+  if (!caLoggedIn) {
+    greeting.style.display = 'none';
+    return;
+  }
+  try {
+    const p = await api('/profile/me');
+    const firstName = (p.display_name || '').split(' ')[0];
+    greeting.textContent = firstName ? `היי, ${firstName}` : '';
+    greeting.style.display = firstName ? '' : 'none';
+  } catch {
+    greeting.style.display = 'none';
+  }
 }
 
 function caDrawResultsGrid() {
