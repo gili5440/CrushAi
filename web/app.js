@@ -91,7 +91,7 @@ function caUpdateHomeRecent() {
   if (cta) cta.style.display = caLoggedIn ? 'none' : '';
 }
 
-const CA_SCREENS = ['auth', 'onboarding', 'notif', 'home', 'analyzing', 'results', 'profile', 'chats', 'settings',
+const CA_SCREENS = ['auth', 'onboarding', 'home', 'analyzing', 'results', 'profile', 'chats', 'settings',
   'verify', 'safety', 'delete', 'quiz', 'premium', 'splash', 'chatroom', 'match', 'edit-profile', 'inbox',
   'discovery', 'showme', 'invite', 'boost', 'interests', 'orientation', 'otp'];
 
@@ -112,7 +112,7 @@ function caNavigateTo(name) {
   if (name === 'edit-profile') caLoadEditProfile();
   if (name === 'home') caUpdateHomeRecent();
   const tabbar = document.querySelector('.ca-tabbar');
-  if (tabbar) tabbar.classList.toggle('ca-hidden', ['auth', 'onboarding', 'notif', 'quiz', 'splash', 'chatroom', 'match', 'otp'].includes(name));
+  if (tabbar) tabbar.classList.toggle('ca-hidden', ['auth', 'onboarding', 'quiz', 'splash', 'chatroom', 'match', 'otp'].includes(name));
   ['home', 'results', 'chats', 'settings'].forEach(t => {
     document.getElementById('ca-tab-' + t)?.classList.remove('active');
   });
@@ -414,7 +414,9 @@ async function caOnboardNext() {
     for (const file of caExtraPhotoFiles) if (file) await caUploadPhoto(file);
 
     caHasProfile = true;
-    caShowScreen('notif');
+    // Skip the "we'll notify you" screen — land the user straight back on what
+    // they were doing (or Home), so they immediately search instead of just waiting.
+    caFinishAuthFlow();
   } catch (err) {
     alert('שגיאה בשמירת הפרופיל: ' + (err instanceof ApiError ? (err.body?.error || err.message) : 'שגיאה לא צפויה'));
   } finally {
@@ -435,10 +437,6 @@ function caOnboardBack() {
   } else {
     caGoBack();
   }
-}
-
-function caFinishNotif() {
-  caFinishAuthFlow();
 }
 
 /* ===========================================================
