@@ -7,6 +7,7 @@ import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import { pool } from "./lib/db";
 import { runMigrations } from "./lib/migrate";
+import { runSeed } from "./lib/seed";
 import { authRouter } from "./routes/auth";
 import { matchesRouter } from "./routes/matches";
 import { profileRouter } from "./routes/profile";
@@ -83,7 +84,12 @@ const port = Number(process.env.PORT) || 4000;
 // Applies any pending SQL migrations before accepting traffic — no manual
 // shell step needed (Render's free tier doesn't allow shell/SSH access anyway).
 runMigrations(pool)
-  .then(() => {
+  .then(async () => {
+    // Same reasoning as migrations above — also repairs demo-profile photos
+    // left pointing at local-disk paths that Render wipes on every deploy.
+    // Failure here shouldn't block the server from starting.
+    await runSeed(pool).catch((err) => console.error("seed failed (non-fatal)", err));
+
     app.listen(port, () => {
       console.log(`YourType backend listening on http://localhost:${port}`);
     });

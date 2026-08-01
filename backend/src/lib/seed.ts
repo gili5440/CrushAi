@@ -1,9 +1,10 @@
 import "dotenv/config";
 import bcrypt from "bcryptjs";
-import { pool } from "./db";
+import { Pool } from "pg";
 
 // Test/demo profiles so search always has someone to find while QA-ing
-// without real users signed up yet. Safe to re-run — skips existing seed users.
+// without real users signed up yet. Safe to re-run — skips existing seed users,
+// and repairs their photo if it's missing or still pointing at a wiped local-disk path.
 const SEED_PROFILES = [
   { email: "dana.seed@crushai.local", name: "דנה", age: 26, gender: "female", interestedIn: "men", region: "תל אביב", bio: "אוהבת טיולים, קפה טוב וסרטי אימה.", seed: "Dana" },
   { email: "tom.seed@crushai.local", name: "תום", age: 29, gender: "male", interestedIn: "women", region: "רמת גן", bio: "מהנדס תוכנה בלילה, גיטריסט בסופ\"ש.", seed: "Tom" },
@@ -13,7 +14,7 @@ const SEED_PROFILES = [
   { email: "ron.seed@crushai.local", name: "רון", age: 30, gender: "male", interestedIn: "women", region: "ירושלים", bio: "רץ מרתונים, עובד בהייטק.", seed: "Ron" },
 ];
 
-async function main() {
+export async function runSeed(pool: Pool): Promise<void> {
   const passwordHash = await bcrypt.hash("seed-account-not-for-login", 12);
 
   for (const p of SEED_PROFILES) {
@@ -59,11 +60,16 @@ async function main() {
       console.log(`  fixed broken photo for ${p.name}`);
     }
   }
-
-  await pool.end();
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+// CLI entrypoint for local/manual use: `npm run seed`.
+// require.main check keeps this from firing when imported (e.g. by index.ts on boot).
+if (require.main === module) {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  runSeed(pool)
+    .then(() => pool.end())
+    .catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+}
