@@ -4,21 +4,25 @@ import { Pool } from "pg";
 
 // Test/demo profiles so search always has someone to find while QA-ing
 // without real users signed up yet. Safe to re-run — skips existing seed users,
-// and repairs their photo if it's missing or still pointing at a wiped local-disk path.
+// and repairs their photo if it's stale (wiped local-disk path, or an older
+// placeholder). Photos are AI-generated faces (thispersondoesnotexist.com,
+// StyleGAN2 — no real person), pre-uploaded to our own R2 bucket so they're
+// permanent instead of depending on an external generator at request time.
+const R2_PUBLIC_BASE = "https://pub-70dfa78fa63b416ebf4fd8f54b53ed18.r2.dev";
 const SEED_PROFILES = [
-  { email: "dana.seed@crushai.local", name: "דנה", age: 26, gender: "female", interestedIn: "men", region: "תל אביב", bio: "אוהבת טיולים, קפה טוב וסרטי אימה.", seed: "Dana" },
-  { email: "tom.seed@crushai.local", name: "תום", age: 29, gender: "male", interestedIn: "women", region: "רמת גן", bio: "מהנדס תוכנה בלילה, גיטריסט בסופ\"ש.", seed: "Tom" },
-  { email: "maya.seed@crushai.local", name: "מיה", age: 24, gender: "female", interestedIn: "men", region: "פתח תקווה", bio: "סטודנטית לעיצוב. אוהבת אמנות ויוגה.", seed: "Maya" },
-  { email: "itay.seed@crushai.local", name: "איתי", age: 31, gender: "male", interestedIn: "women", region: "גבעתיים", bio: "שף במקצועו. אוהב בישול, טניס וספרים.", seed: "Itay" },
-  { email: "noa.seed@crushai.local", name: "נועה", age: 27, gender: "female", interestedIn: "men", region: "חיפה", bio: "אוהבת מוזיקה חיה וערבים שקטים.", seed: "Noa" },
-  { email: "ron.seed@crushai.local", name: "רון", age: 30, gender: "male", interestedIn: "women", region: "ירושלים", bio: "רץ מרתונים, עובד בהייטק.", seed: "Ron" },
+  { email: "dana.seed@crushai.local", name: "דנה", age: 26, gender: "female", interestedIn: "men", region: "תל אביב", bio: "אוהבת טיולים, קפה טוב וסרטי אימה.", photoKey: "dana" },
+  { email: "tom.seed@crushai.local", name: "תום", age: 29, gender: "male", interestedIn: "women", region: "רמת גן", bio: "מהנדס תוכנה בלילה, גיטריסט בסופ\"ש.", photoKey: "tom" },
+  { email: "maya.seed@crushai.local", name: "מיה", age: 24, gender: "female", interestedIn: "men", region: "פתח תקווה", bio: "סטודנטית לעיצוב. אוהבת אמנות ויוגה.", photoKey: "maya" },
+  { email: "itay.seed@crushai.local", name: "איתי", age: 31, gender: "male", interestedIn: "women", region: "גבעתיים", bio: "שף במקצועו. אוהב בישול, טניס וספרים.", photoKey: "itay" },
+  { email: "noa.seed@crushai.local", name: "נועה", age: 27, gender: "female", interestedIn: "men", region: "חיפה", bio: "אוהבת מוזיקה חיה וערבים שקטים.", photoKey: "noa" },
+  { email: "ron.seed@crushai.local", name: "רון", age: 30, gender: "male", interestedIn: "women", region: "ירושלים", bio: "רץ מרתונים, עובד בהייטק.", photoKey: "ron" },
 ];
 
 export async function runSeed(pool: Pool): Promise<void> {
   const passwordHash = await bcrypt.hash("seed-account-not-for-login", 12);
 
   for (const p of SEED_PROFILES) {
-    const photoUrl = `https://api.dicebear.com/9.x/lorelei/png?seed=${p.seed}&backgroundColor=2b1b42,4a3560,3a2e4a`;
+    const photoUrl = `${R2_PUBLIC_BASE}/seed-photos/${p.photoKey}.jpg`;
 
     const existing = await pool.query("SELECT id FROM users WHERE email = $1", [p.email]);
     let profileId: string;
@@ -43,8 +47,8 @@ export async function runSeed(pool: Pool): Promise<void> {
       console.log(`seeded ${p.name} (${p.email})`);
     }
 
-    // Re-run-safe: fixes photos left pointing at wiped local-disk paths from
-    // before object storage was configured (Render's disk resets on deploy).
+    // Re-run-safe: fixes photos left pointing at wiped local-disk paths, or at
+    // an older placeholder (e.g. the dicebear cartoon avatars used previously).
     const photo = await pool.query(
       "SELECT id, storage_url FROM profile_photos WHERE profile_id = $1 AND is_primary = true",
       [profileId]
@@ -55,9 +59,29 @@ export async function runSeed(pool: Pool): Promise<void> {
         photoUrl,
       ]);
       console.log(`  added missing photo for ${p.name}`);
-    } else if (photo.rows[0].storage_url !== photoUrl && photo.rows[0].storage_url.startsWith("/uploads/")) {
+    } else if (photo.rows[0].storage_url !== photoUrl) {
       await pool.query("UPDATE profile_photos SET storage_url = $1 WHERE id = $2", [photoUrl, photo.rows[0].id]);
-      console.log(`  fixed broken photo for ${p.name}`);
+      console.log(`  updated photo for ${p.name}`);
+    }
+
+    // Removes exact-duplicate impostor profiles left behind by some earlier,
+    // non-seed-script process — same name/region/bio as the real seed profile,
+    // under a different account, with a photo pointing at a wiped local-disk
+    // path. Matches on all three fields plus the broken photo so this can
+    // never touch a real user who happens to share a seed's display name.
+    const dupes = await pool.query(
+      `SELECT u.id AS user_id
+       FROM profiles p
+       JOIN users u ON u.id = p.user_id
+       JOIN profile_photos ph ON ph.profile_id = p.id AND ph.is_primary = true
+       WHERE p.display_name = $1 AND p.region = $2 AND p.bio = $3
+         AND u.email IS DISTINCT FROM $4
+         AND ph.storage_url LIKE '/uploads/%'`,
+      [p.name, p.region, p.bio, p.email]
+    );
+    for (const dupe of dupes.rows) {
+      await pool.query("DELETE FROM users WHERE id = $1", [dupe.user_id]);
+      console.log(`  removed duplicate impostor profile for ${p.name}`);
     }
   }
 }
