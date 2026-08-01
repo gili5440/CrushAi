@@ -17,33 +17,47 @@ async function main() {
   const passwordHash = await bcrypt.hash("seed-account-not-for-login", 12);
 
   for (const p of SEED_PROFILES) {
+    const photoUrl = `https://api.dicebear.com/9.x/lorelei/png?seed=${p.seed}&backgroundColor=2b1b42,4a3560,3a2e4a`;
+
     const existing = await pool.query("SELECT id FROM users WHERE email = $1", [p.email]);
+    let profileId: string;
+
     if (existing.rowCount) {
-      console.log(`skip ${p.email} (already seeded)`);
-      continue;
+      const profileResult = await pool.query("SELECT id FROM profiles WHERE user_id = $1", [existing.rows[0].id]);
+      profileId = profileResult.rows[0].id;
+    } else {
+      const year = new Date().getFullYear() - p.age;
+      const userResult = await pool.query(
+        `INSERT INTO users (email, password_hash, auth_provider, terms_accepted_at) VALUES ($1, $2, 'email', now()) RETURNING id`,
+        [p.email, passwordHash]
+      );
+      const userId = userResult.rows[0].id;
+
+      const profileResult = await pool.query(
+        `INSERT INTO profiles (user_id, display_name, birth_date, gender, interested_in, bio, region)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+        [userId, p.name, `${year}-06-15`, p.gender, p.interestedIn, p.bio, p.region]
+      );
+      profileId = profileResult.rows[0].id;
+      console.log(`seeded ${p.name} (${p.email})`);
     }
 
-    const year = new Date().getFullYear() - p.age;
-    const userResult = await pool.query(
-      `INSERT INTO users (email, password_hash, auth_provider, terms_accepted_at) VALUES ($1, $2, 'email', now()) RETURNING id`,
-      [p.email, passwordHash]
+    // Re-run-safe: fixes photos left pointing at wiped local-disk paths from
+    // before object storage was configured (Render's disk resets on deploy).
+    const photo = await pool.query(
+      "SELECT id, storage_url FROM profile_photos WHERE profile_id = $1 AND is_primary = true",
+      [profileId]
     );
-    const userId = userResult.rows[0].id;
-
-    const profileResult = await pool.query(
-      `INSERT INTO profiles (user_id, display_name, birth_date, gender, interested_in, bio, region)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-      [userId, p.name, `${year}-06-15`, p.gender, p.interestedIn, p.bio, p.region]
-    );
-    const profileId = profileResult.rows[0].id;
-
-    const photoUrl = `https://api.dicebear.com/9.x/lorelei/png?seed=${p.seed}&backgroundColor=2b1b42,4a3560,3a2e4a`;
-    await pool.query(
-      `INSERT INTO profile_photos (profile_id, storage_url, is_primary) VALUES ($1, $2, true)`,
-      [profileId, photoUrl]
-    );
-
-    console.log(`seeded ${p.name} (${p.email})`);
+    if (!photo.rowCount) {
+      await pool.query(`INSERT INTO profile_photos (profile_id, storage_url, is_primary) VALUES ($1, $2, true)`, [
+        profileId,
+        photoUrl,
+      ]);
+      console.log(`  added missing photo for ${p.name}`);
+    } else if (photo.rows[0].storage_url !== photoUrl && photo.rows[0].storage_url.startsWith("/uploads/")) {
+      await pool.query("UPDATE profile_photos SET storage_url = $1 WHERE id = $2", [photoUrl, photo.rows[0].id]);
+      console.log(`  fixed broken photo for ${p.name}`);
+    }
   }
 
   await pool.end();

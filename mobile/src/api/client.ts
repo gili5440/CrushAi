@@ -3,8 +3,9 @@ import { Platform } from "react-native";
 
 // When running on a physical device/emulator, localhost refers to the device itself,
 // not your dev machine. Android emulator uses 10.0.2.2 to reach the host machine.
+// __DEV__ is false in production (published) builds, so those talk to the real backend instead.
 const HOST = Platform.OS === "android" ? "10.0.2.2" : "localhost";
-export const API_BASE_URL = `http://${HOST}:4000`;
+export const API_BASE_URL = __DEV__ ? `http://${HOST}:4000` : "https://crushai-backend.onrender.com";
 
 const TOKEN_KEY = "crushai_token";
 
