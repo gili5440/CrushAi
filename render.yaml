@@ -35,11 +35,10 @@ services:
       # backend) don't need this at all, it's only for other origins.
       - key: ALLOWED_ORIGINS
         sync: false
+      # Using the public URL directly — Render's internal service-to-service
+      # hostname binding wasn't resolving reliably, this is simpler and confirmed working.
       - key: EMBEDDING_SERVICE_URL
-        fromService:
-          type: web
-          name: crushai-embeddings
-          property: hostport
+        value: https://crushai-embeddings.onrender.com
       # Object storage (fill in once you have an R2/S3 bucket — see backend/.env.example):
       - key: S3_BUCKET
         sync: false
@@ -60,5 +59,8 @@ services:
     runtime: docker
     dockerfilePath: ./embedding-service/Dockerfile
     dockerContext: ./embedding-service
-    plan: free
+    # Manually upgraded to Standard (2GB) in the Render dashboard — the AI
+    # model doesn't fit in the free tier's 512MB. Keep this in sync with the
+    # dashboard so a future blueprint sync doesn't silently downgrade it.
+    plan: standard
     healthCheckPath: /health
