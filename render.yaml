@@ -37,7 +37,7 @@ services:
         sync: false
       - key: EMBEDDING_SERVICE_URL
         fromService:
-          type: pserv
+          type: web
           name: crushai-embeddings
           property: hostport
       # Object storage (fill in once you have an R2/S3 bucket — see backend/.env.example):
@@ -52,9 +52,13 @@ services:
       - key: S3_PUBLIC_URL
         sync: false
 
-  - type: pserv
+  # Render's free tier only supports "web" services (not Private Services),
+  # so this is public — it has no auth of its own. Fine for an MVP; revisit
+  # if that becomes a concern (e.g. put it behind a shared-secret header).
+  - type: web
     name: crushai-embeddings
     runtime: docker
     dockerfilePath: ./embedding-service/Dockerfile
     dockerContext: ./embedding-service
     plan: free
+    healthCheckPath: /health
