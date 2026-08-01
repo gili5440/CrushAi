@@ -9,7 +9,11 @@ export const authRouter = Router();
 
 const signupSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(8),
+  password: z
+    .string()
+    .min(8, "password_too_short")
+    .regex(/[a-zA-Z]/, "password_needs_letter")
+    .regex(/[0-9]/, "password_needs_number"),
   birthDate: z.string().refine((d) => !Number.isNaN(Date.parse(d)), "invalid_date"),
   acceptedTerms: z.literal(true),
 });
@@ -32,7 +36,8 @@ function issueToken(userId: string): string {
 authRouter.post("/signup", async (req, res) => {
   const parsed = signupSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "invalid_input", details: parsed.error.flatten() });
+    const passwordIssue = parsed.error.issues.find((i) => i.path[0] === "password");
+    return res.status(400).json({ error: passwordIssue?.message || "invalid_input", details: parsed.error.flatten() });
   }
   const { email, password, birthDate, acceptedTerms } = parsed.data;
 

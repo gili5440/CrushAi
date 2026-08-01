@@ -265,6 +265,9 @@ function caAuthErrorMessage(err) {
     case 'email_already_registered': return 'כבר יש חשבון עם האימייל הזה.';
     case 'invalid_credentials': return 'אימייל או סיסמה שגויים.';
     case 'account_banned': return 'החשבון הזה חסום.';
+    case 'password_too_short': return 'הסיסמה חייבת להכיל לפחות 8 תווים.';
+    case 'password_needs_letter': return 'הסיסמה חייבת להכיל לפחות אות אחת.';
+    case 'password_needs_number': return 'הסיסמה חייבת להכיל לפחות ספרה אחת.';
     default: return 'אירעה שגיאה. נסה/נסי שוב.';
   }
 }
@@ -564,7 +567,7 @@ function caDrawResultsGrid() {
         <div class="ca-bust" style="--a:#5A3A6E;--b:#241A34;--tile-img:${caTileImgUrl(p.primary_photo_url, p.profile_id)};"></div>
       </div>
       <div class="ca-card-body">
-        <div class="ca-card-name">${p.display_name}, ${ageFromBirthDate(p.birth_date)}</div>
+        <div class="ca-card-name">${escapeHtml(p.display_name)}, ${ageFromBirthDate(p.birth_date)}</div>
         <div class="ca-card-meta">${[p.region, p.profession].filter(Boolean).map(escapeHtml).join(' · ')}</div>
         ${p.bio ? `<div class="ca-card-snippet">${escapeHtml(p.bio)}</div>` : ''}
       </div>
@@ -679,10 +682,10 @@ async function caRenderChats() {
       row.style.cursor = 'pointer';
       row.onclick = () => caOpenChatroomById(m.id, m.display_name, m.primary_photo_url, m.other_user_id);
       row.innerHTML = `
-        <div class="ca-avatar" style="width:44px; height:44px;"><div class="ca-bust" style="--a:#4A3560;--b:#241a34;--tile-img:${caTileImgUrl(m.primary_photo_url, m.display_name)};"></div></div>
+        <div class="ca-avatar" style="width:44px; height:44px;"><div class="ca-bust" style="--a:#4A3560;--b:#241a34;--tile-img:${caTileImgUrl(m.primary_photo_url, m.other_user_id)};"></div></div>
         <div>
-          <div class="ca-card-name">${m.display_name}</div>
-          <div class="ca-card-meta">${m.last_message || 'שלחו הודעה ראשונה'}</div>
+          <div class="ca-card-name">${escapeHtml(m.display_name)}</div>
+          <div class="ca-card-meta">${escapeHtml(m.last_message || 'שלחו הודעה ראשונה')}</div>
         </div>`;
       container.appendChild(row);
     });
@@ -807,7 +810,7 @@ async function caRenderSettings() {
       avatarBust.className = 'ca-bust';
       document.querySelector('.ca-settings-avatar').appendChild(avatarBust);
     }
-    avatarBust.style.setProperty('--tile-img', caTileImgUrl(p.photos?.[0]?.storage_url, p.display_name));
+    avatarBust.style.setProperty('--tile-img', caTileImgUrl(p.photos?.[0]?.storage_url, p.id));
     avatarBust.style.setProperty('--a', '#5A3A6E');
     avatarBust.style.setProperty('--b', '#241A34');
   } catch {

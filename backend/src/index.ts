@@ -4,6 +4,7 @@ import path from "path";
 import cors from "cors";
 import express from "express";
 import rateLimit from "express-rate-limit";
+import helmet from "helmet";
 import { pool } from "./lib/db";
 import { runMigrations } from "./lib/migrate";
 import { authRouter } from "./routes/auth";
@@ -21,6 +22,12 @@ if (isProduction && (!process.env.JWT_SECRET || process.env.JWT_SECRET.startsWit
 
 const app = express();
 app.set("trust proxy", 1); // needed behind a reverse proxy (Railway/Render/etc.) for rate-limit + req.ip to work
+
+// Standard security headers (X-Frame-Options, X-Content-Type-Options, Referrer-Policy, etc.).
+// CSP is left off: web/index.html relies on inline onclick="" handlers and an inline <style>
+// block throughout (matching the original design), plus Google Fonts + dicebear.com images —
+// a real CSP here would need those handlers refactored to addEventListener first.
+app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || "").split(",").map((s) => s.trim()).filter(Boolean);
 app.use(
