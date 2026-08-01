@@ -15,6 +15,16 @@ const upload = multer({
 
 const PAGE_SIZE = 20;
 
+// "men"/"women" (what profiles store for interested_in) -> "male"/"female" (what profiles store for gender).
+const INTERESTED_IN_TO_GENDER: Record<string, string> = { men: "male", women: "female" };
+
+/** The searcher's own preference, used as the default gender filter when a search doesn't specify one explicitly. */
+async function getPreferredGender(userId: string): Promise<string | undefined> {
+  const result = await pool.query("SELECT interested_in FROM profiles WHERE user_id = $1", [userId]);
+  const interestedIn = result.rows[0]?.interested_in as string | undefined;
+  return interestedIn ? INTERESTED_IN_TO_GENDER[interestedIn] : undefined;
+}
+
 async function fetchResultsPage(
   embeddingLiteral: string,
   userId: string,
@@ -116,7 +126,7 @@ searchRouter.post("/visual", upload.single("photo"), async (req: AuthedRequest, 
   const filters = {
     minAge: req.body.minAge ? Number(req.body.minAge) : undefined,
     maxAge: req.body.maxAge ? Number(req.body.maxAge) : undefined,
-    gender: req.body.gender || undefined,
+    gender: req.body.gender || (await getPreferredGender(req.userId!)),
   };
 
   let embeddingLiteral: string | null = null;
@@ -176,6 +186,12 @@ searchRouter.post("/traits", async (req: AuthedRequest, res) => {
   ];
   const params: any[] = [req.userId];
   let idx = 2;
+
+  const preferredGender = await getPreferredGender(req.userId!);
+  if (preferredGender) {
+    conditions.push(`p.gender = $${idx++}`);
+    params.push(preferredGender);
+  }
 
   conditions.push(`date_part('year', age(p.birth_date)) >= $${idx++}`);
   params.push(ageMin);
