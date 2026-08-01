@@ -4,6 +4,8 @@ import path from "path";
 import cors from "cors";
 import express from "express";
 import rateLimit from "express-rate-limit";
+import { pool } from "./lib/db";
+import { runMigrations } from "./lib/migrate";
 import { authRouter } from "./routes/auth";
 import { matchesRouter } from "./routes/matches";
 import { profileRouter } from "./routes/profile";
@@ -70,6 +72,16 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 process.on("unhandledRejection", (err) => console.error("unhandledRejection", err));
 
 const port = Number(process.env.PORT) || 4000;
-app.listen(port, () => {
-  console.log(`CrushAI backend listening on http://localhost:${port}`);
-});
+
+// Applies any pending SQL migrations before accepting traffic — no manual
+// shell step needed (Render's free tier doesn't allow shell/SSH access anyway).
+runMigrations(pool)
+  .then(() => {
+    app.listen(port, () => {
+      console.log(`CrushAI backend listening on http://localhost:${port}`);
+    });
+  })
+  .catch((err) => {
+    console.error("migration failed, refusing to start", err);
+    process.exit(1);
+  });

@@ -3,8 +3,7 @@ import fs from "fs";
 import path from "path";
 import { Pool } from "pg";
 
-async function main() {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+export async function runMigrations(pool: Pool): Promise<void> {
   const migrationsDir = path.join(__dirname, "..", "..", "migrations");
   const files = fs.readdirSync(migrationsDir).filter((f) => f.endsWith(".sql")).sort();
 
@@ -34,11 +33,16 @@ async function main() {
       client.release();
     }
   }
-
-  await pool.end();
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+// CLI entrypoint for local/manual use: `npm run migrate` / `npm run migrate:prod`.
+// require.main check keeps this from firing when imported (e.g. by index.ts on boot).
+if (require.main === module) {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  runMigrations(pool)
+    .then(() => pool.end())
+    .catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+}
