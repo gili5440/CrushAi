@@ -93,7 +93,7 @@ function caUpdateHomeRecent() {
 
 const CA_SCREENS = ['auth', 'onboarding', 'notif', 'home', 'analyzing', 'results', 'profile', 'chats', 'settings',
   'verify', 'safety', 'delete', 'quiz', 'premium', 'splash', 'chatroom', 'match', 'edit-profile', 'inbox',
-  'discovery', 'showme', 'invite', 'boost', 'forgot', 'interests', 'orientation', 'otp'];
+  'discovery', 'showme', 'invite', 'boost', 'interests', 'orientation', 'otp'];
 
 function caNavigateTo(name) {
   if ((name === 'results' || name === 'chats' || name === 'settings') && !caLoggedIn) {
@@ -179,30 +179,11 @@ function caRequireAuth(action) {
 })();
 
 /* ===========================================================
-   Auth (signup / login) — real, followed by simulated OTP for
-   new signups (no SMS provider wired up yet — any 6-digit code
-   is accepted so the rest of the flow can be built end-to-end).
+   Auth — phone number + SMS code only (Tinder-style, no password).
+   Twilio isn't wired up yet, so until then the backend returns the
+   code directly in the response ("dev mode") instead of texting it.
    =========================================================== */
-let caAuthMode = 'signup';
-
-function caAuthTab(mode) {
-  caAuthMode = mode;
-  const signupBtn = document.getElementById('ca-tab-signup');
-  const loginBtn = document.getElementById('ca-tab-login');
-  const forgot = document.getElementById('ca-forgot-link');
-  const submit = document.getElementById('ca-auth-submit');
-  if (mode === 'signup') {
-    signupBtn.classList.add('active');
-    loginBtn.classList.remove('active');
-    forgot.style.display = 'none';
-    submit.textContent = 'המשך';
-  } else {
-    loginBtn.classList.add('active');
-    signupBtn.classList.remove('active');
-    forgot.style.display = '';
-    submit.textContent = 'התחברות';
-  }
-}
+let caPendingPhone = null;
 
 function caUpdateAuthGate() {
   const submit = document.getElementById('ca-auth-submit');
@@ -211,48 +192,18 @@ function caUpdateAuthGate() {
   submit.style.pointerEvents = checked ? 'auto' : 'none';
 }
 
-function caAuthFields() {
-  const scope = document.getElementById('ca-screen-auth');
-  return {
-    email: scope.querySelector('input[type=email]'),
-    phone: scope.querySelector('input[type=tel]'),
-    password: scope.querySelector('input[type=password]'),
-  };
-}
-
 async function caStartOtp() {
-  const { email, password } = caAuthFields();
-  if (!email.value || !password.value) { alert('נא למלא אימייל וסיסמה'); return; }
+  const phone = document.getElementById('ca-auth-phone').value.trim();
+  if (!phone) { alert('נא להזין מספר טלפון'); return; }
 
   try {
-    if (caAuthMode === 'signup') {
-      const result = await api('/auth/signup', {
-        method: 'POST',
-        body: JSON.stringify({
-          email: email.value,
-          password: password.value,
-          birthDate: '2000-01-01', // placeholder — real DOB is collected (as age) in onboarding
-          acceptedTerms: true,
-        }),
-      });
-      setToken(result.token);
-      caLoggedIn = true;
-      caHasProfile = false;
-      document.getElementById('ca-otp-input').value = '';
-      caShowScreen('otp');
-    } else {
-      const result = await api('/auth/login', { method: 'POST', body: JSON.stringify({ email: email.value, password: password.value }) });
-      setToken(result.token);
-      caLoggedIn = true;
-      try {
-        await api('/profile/me');
-        caHasProfile = true;
-        caFinishAuthFlow();
-      } catch (err) {
-        caHasProfile = false;
-        caShowScreen('onboarding');
-      }
-    }
+    const result = await api('/auth/otp/request', { method: 'POST', body: JSON.stringify({ phone }) });
+    caPendingPhone = phone;
+    document.getElementById('ca-otp-input').value = '';
+    document.getElementById('ca-otp-sub').textContent = result.devCode
+      ? `מצב פיתוח (עדיין בלי SMS אמיתי) — הקוד שלך: ${result.devCode}`
+      : 'שלחנו קוד בן 6 ספרות ב-SMS למספר שהזנת';
+    caShowScreen('otp');
   } catch (err) {
     alert(caAuthErrorMessage(err));
   }
@@ -261,28 +212,54 @@ async function caStartOtp() {
 function caAuthErrorMessage(err) {
   const code = err instanceof ApiError ? err.body?.error : null;
   switch (code) {
-    case 'must_be_18_or_older': return 'צריך להיות מעל גיל 18.';
-    case 'email_already_registered': return 'כבר יש חשבון עם האימייל הזה.';
-    case 'invalid_credentials': return 'אימייל או סיסמה שגויים.';
+    case 'invalid_phone': return 'מספר הטלפון לא תקין.';
     case 'account_banned': return 'החשבון הזה חסום.';
-    case 'password_too_short': return 'הסיסמה חייבת להכיל לפחות 8 תווים.';
-    case 'password_needs_letter': return 'הסיסמה חייבת להכיל לפחות אות אחת.';
-    case 'password_needs_number': return 'הסיסמה חייבת להכיל לפחות ספרה אחת.';
+    case 'invalid_or_expired_code': return 'הקוד שגוי או שפג תוקפו.';
     default: return 'אירעה שגיאה. נסה/נסי שוב.';
   }
 }
 
-function caVerifyOtp() {
+async function caVerifyOtp() {
   const code = document.getElementById('ca-otp-input').value.trim();
   if (code.length !== 6) { alert('נא להזין קוד בן 6 ספרות'); return; }
-  caOnboardStep = 1;
-  caUpdateOnboardStep();
-  caUpdateHeightRange();
-  caShowScreen('onboarding');
+
+  try {
+    const result = await api('/auth/otp/verify', { method: 'POST', body: JSON.stringify({ phone: caPendingPhone, code }) });
+    setToken(result.token);
+    caLoggedIn = true;
+
+    if (result.isNewUser) {
+      caHasProfile = false;
+      caOnboardStep = 1;
+      caUpdateOnboardStep();
+      caUpdateHeightRange();
+      caShowScreen('onboarding');
+      return;
+    }
+    try {
+      await api('/profile/me');
+      caHasProfile = true;
+      caFinishAuthFlow();
+    } catch {
+      caHasProfile = false;
+      caShowScreen('onboarding');
+    }
+  } catch (err) {
+    alert(caAuthErrorMessage(err));
+  }
 }
 
-function caResendOtp() {
-  alert('קוד חדש נשלח ב-SMS');
+async function caResendOtp() {
+  if (!caPendingPhone) return;
+  try {
+    const result = await api('/auth/otp/request', { method: 'POST', body: JSON.stringify({ phone: caPendingPhone }) });
+    document.getElementById('ca-otp-sub').textContent = result.devCode
+      ? `מצב פיתוח (עדיין בלי SMS אמיתי) — הקוד שלך: ${result.devCode}`
+      : 'שלחנו קוד בן 6 ספרות ב-SMS למספר שהזנת';
+    alert('קוד חדש נשלח');
+  } catch {
+    alert('לא הצלחנו לשלוח קוד חדש. נסה/נסי שוב.');
+  }
 }
 
 function caFinishAuthFlow() {
@@ -392,7 +369,10 @@ function caOnboardStep2Fields() {
 
 async function caOnboardNext() {
   if (caOnboardStep < 3) {
-    if (caOnboardStep === 1 && !caMainPhotoFile) { alert('יש לבחור תמונה ראשית'); return; }
+    if (caOnboardStep === 1) {
+      if (!caMainPhotoFile) { alert('יש לבחור תמונה ראשית'); return; }
+      if (!document.getElementById('ca-ob-name').value.trim()) { alert('נא להזין שם פרטי'); return; }
+    }
     caOnboardStep++;
     caUpdateOnboardStep();
     return;
@@ -417,7 +397,7 @@ async function caOnboardNext() {
     await api('/profile/me', {
       method: 'PUT',
       body: JSON.stringify({
-        displayName: (caAuthFields().email.value || 'משתמש/ת').split('@')[0],
+        displayName: document.getElementById('ca-ob-name').value.trim() || 'משתמש/ת',
         birthDate: `${year}-01-01`,
         gender: f.genderActive,
         interestedIn: f.interestActive,

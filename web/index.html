@@ -847,21 +847,8 @@ body{
     <div class="ca-tagline" style="margin-bottom:24px;">חשבון קטן, כדי שההתאמות שלך יישמרו והצד השני יוכל לענות לך</div>
 
     <div class="ca-auth-wrap" style="padding-top:0;">
-      <div class="ca-auth-toggle">
-        <button id="ca-tab-signup" class="active" onclick="caAuthTab('signup')">הרשמה מהירה</button>
-        <button id="ca-tab-login" onclick="caAuthTab('login')">התחברות</button>
-      </div>
-
-      <label class="ca-field-label">אימייל</label>
-      <input class="ca-input" type="email" placeholder="name@example.com">
-
       <label class="ca-field-label">מספר טלפון</label>
-      <input class="ca-input" type="tel" placeholder="050-1234567" dir="ltr" style="text-align:right;">
-
-      <label class="ca-field-label">סיסמה</label>
-      <input class="ca-input" type="password" placeholder="••••••••">
-
-      <div class="ca-forgot" id="ca-forgot-link" style="display:none;" onclick="caShowScreen('forgot')">שכחת סיסמה?</div>
+      <input class="ca-input" type="tel" id="ca-auth-phone" placeholder="050-1234567" dir="ltr" style="text-align:right;">
 
       <label style="display:flex; align-items:flex-start; gap:10px; margin-bottom:20px; font-size:12.5px; color:var(--ca-text-secondary); line-height:1.5; cursor:pointer;">
         <input type="checkbox" id="ca-age-check" onchange="caUpdateAuthGate()" style="margin-top:2px; width:16px; height:16px; accent-color:#E8768F;">
@@ -869,14 +856,14 @@ body{
       </label>
 
       <button class="ca-btn ca-btn-primary" style="margin-top:4px; opacity:0.5; pointer-events:none;" onclick="caStartOtp()" id="ca-auth-submit">
-        המשך
+        שליחת קוד אימות
       </button>
 
       <div class="ca-divider">או</div>
 
       <div class="ca-social-row">
-        <button class="ca-social-btn" onclick="caStartOtp()">Google</button>
-        <button class="ca-social-btn" onclick="caStartOtp()">Apple</button>
+        <button class="ca-social-btn" onclick="alert('בקרוב')">Google</button>
+        <button class="ca-social-btn" onclick="alert('בקרוב')">Apple</button>
       </div>
 
       <div class="ca-legal">בהמשך את/ה מאשר/ת את תנאי השימוש ומדיניות הפרטיות של CrushAI</div>
@@ -899,6 +886,8 @@ body{
         <div class="ca-photo-slot" onclick="caPickPhoto(this)">+</div>
         <div class="ca-photo-slot" onclick="caPickPhoto(this)">+</div>
       </div>
+      <label class="ca-field-label">שם פרטי</label>
+      <input class="ca-input" type="text" id="ca-ob-name" placeholder="איך קוראים לך?">
     </div>
 
     <div class="ca-step" id="ca-ob-step-2">
@@ -1342,16 +1331,6 @@ body{
       <div class="ca-trait" onclick="caToggleTrait(this)">פאנסקסואל/ית</div>
     </div>
     <button class="ca-btn ca-btn-primary" style="margin-top:16px;" onclick="caSaveOrientation()">שמירה</button>
-  </div>
-
-  <div class="ca-content ca-screen ca-hidden" id="ca-screen-forgot">
-    <div class="ca-back" onclick="caGoBack()">← חזרה להתחברות</div>
-    <div class="ca-icon-circle" style="margin-top:20px;">🔑</div>
-    <div class="ca-step-title">שחזור סיסמה</div>
-    <div class="ca-step-sub">נשלח לך קישור לאיפוס הסיסמה לכתובת האימייל שלך</div>
-    <label class="ca-field-label">אימייל</label>
-    <input class="ca-input" type="email" placeholder="name@example.com">
-    <button class="ca-btn ca-btn-primary" onclick="alert('קישור לאיפוס נשלח לאימייל שלך'); caAuthTab(\'login\'); caShowScreen(\'auth\');">שליחת קישור</button>
   </div>
 
     <div class="ca-content ca-screen ca-hidden" id="ca-screen-interests">
