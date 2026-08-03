@@ -1,6 +1,8 @@
 import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { Pool } from "pg";
+import { getEmbedding } from "./embeddings";
+import { toVectorLiteral } from "./db";
 
 // Test/demo profiles so search always has someone to find while QA-ing
 // without real users signed up yet. Safe to re-run — skips existing seed users,
@@ -50,18 +52,37 @@ export async function runSeed(pool: Pool): Promise<void> {
     // Re-run-safe: fixes photos left pointing at wiped local-disk paths, or at
     // an older placeholder (e.g. the dicebear cartoon avatars used previously).
     const photo = await pool.query(
-      "SELECT id, storage_url FROM profile_photos WHERE profile_id = $1 AND is_primary = true",
+      "SELECT id, storage_url, embedding FROM profile_photos WHERE profile_id = $1 AND is_primary = true",
       [profileId]
     );
+    const needsEmbedding = !photo.rowCount || photo.rows[0].storage_url !== photoUrl || !photo.rows[0].embedding;
+
+    let embeddingLiteral: string | null = null;
+    if (needsEmbedding) {
+      try {
+        const imageBuffer = Buffer.from(await (await fetch(photoUrl)).arrayBuffer());
+        embeddingLiteral = toVectorLiteral(await getEmbedding(imageBuffer));
+      } catch (err) {
+        console.warn(`  embedding_service_unavailable — seed photo for ${p.name} saved without one`);
+      }
+    }
+
     if (!photo.rowCount) {
-      await pool.query(`INSERT INTO profile_photos (profile_id, storage_url, is_primary) VALUES ($1, $2, true)`, [
-        profileId,
-        photoUrl,
-      ]);
+      await pool.query(
+        `INSERT INTO profile_photos (profile_id, storage_url, embedding, is_primary) VALUES ($1, $2, $3, true)`,
+        [profileId, photoUrl, embeddingLiteral]
+      );
       console.log(`  added missing photo for ${p.name}`);
     } else if (photo.rows[0].storage_url !== photoUrl) {
-      await pool.query("UPDATE profile_photos SET storage_url = $1 WHERE id = $2", [photoUrl, photo.rows[0].id]);
+      await pool.query("UPDATE profile_photos SET storage_url = $1, embedding = $2 WHERE id = $3", [
+        photoUrl,
+        embeddingLiteral,
+        photo.rows[0].id,
+      ]);
       console.log(`  updated photo for ${p.name}`);
+    } else if (!photo.rows[0].embedding && embeddingLiteral) {
+      await pool.query("UPDATE profile_photos SET embedding = $1 WHERE id = $2", [embeddingLiteral, photo.rows[0].id]);
+      console.log(`  backfilled embedding for ${p.name}`);
     }
 
     // Removes exact-duplicate impostor profiles left behind by some earlier,
